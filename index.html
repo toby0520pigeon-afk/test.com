@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>p5.js 響應式測驗網站 - Chiron Sung HK 字體</title>
+    
+    <!-- Google Fonts: Chiron Sung HK -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Chiron+Sung+HK:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- p5.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Chiron Sung HK', serif, system-ui, -apple-system;
+            background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+            color: #f8fafc;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .chiron-font {
+            font-family: 'Chiron Sung HK', serif;
+        }
+        #canvas-container {
+            width: 100%;
+            max-width: 820px;
+            aspect-ratio: 4 / 3;
+        }
+        #canvas-container canvas {
+            display: block;
+            border-radius: 1.25rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.2);
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-between p-3 sm:p-6 chiron-font">
+
+    <!-- Header Section -->
+    <header class="text-center mt-2 mb-2 sm:mb-4">
+        <h1 class="text-2xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 via-indigo-200 to-cyan-300 tracking-wider">
+            🧠 昭源宋體 • p5.js 測驗網站
+        </h1>
+        <p class="text-indigo-200/80 text-xs sm:text-sm mt-1 tracking-wide">
+            套用 Google Fonts「Chiron Sung HK」 • 支援響應式動態縮放
+        </p>
+    </header>
+
+    <!-- Canvas Container -->
+    <main id="canvas-container" class="relative flex justify-center items-center w-full">
+        <!-- p5.js canvas rendered here -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="mb-2 mt-4 text-slate-400 text-xs sm:text-sm text-center">
+        Powered by p5.js & Chiron Sung HK (昭源宋體)
+    </footer>
+
+    <!-- p5.js Quiz Application Logic (sketch.js equivalent) -->
+    <script>
+        // 測驗題目資料庫 (首題固定為 2 + 2 = ?)
+        const quizQuestions = [
+            {
+                question: "2 + 2 = ?",
+                options: ["3", "4", "5", "22"],
+                correct: 1
+            },
+            {
+                question: "一個標準八邊形（Octagon）內角和是多少度？",
+                options: ["720°", "900°", "1080°", "1260°"],
+                correct: 2
+            },
+            {
+                question: "在數列 2, 3, 5, 8, 13, 21, ... 中，下一個數字是？",
+                options: ["28", "34", "39", "42"],
+                correct: 1
+            },
+            {
+                question: "下列哪一個數值最接近圓周率（π）？",
+                options: ["22 / 7", "3.141", "3.142", "355 / 113"],
+                correct: 3
+            },
+            {
+                question: "若 x + y = 10 且 x - y = 4，則 x * y 的值為？",
+                options: ["21", "24", "16", "18"],
+                correct: 0
+            }
+        ];
+
+        // 應用程式狀態變數
+        let currentQuestion = 0;
+        let scoreCount = 0;
+        let gameState = "QUIZ"; // "QUIZ", "FEEDBACK", "END"
+        let selectedOption = -1;
+        let feedbackTimer = 0;
+
+        // 響應式 Layout 佈局設定
+        let optionButtons = [];
+        let restartButton = {};
+        let scaleFactor = 1;
+        const BASE_WIDTH = 800;
+        const BASE_HEIGHT = 600;
+
+        function setup() {
+            let container = document.getElementById('canvas-container');
+            let w = container.clientWidth;
+            let h = container.clientHeight || (w * 0.75);
+
+            let canvas = createCanvas(w, h);
+            canvas.parent('canvas-container');
+
+            // 設置 p5.js 全域字體為 Chiron Sung HK
+            textFont('Chiron Sung HK');
+            recalculateLayout();
+        }
+
+        function recalculateLayout() {
+            scaleFactor = width / BASE_WIDTH;
+
+            optionButtons = [];
+            let startY = height * 0.38;
+            let btnHeight = 56 * scaleFactor;
+            let spacing = 14 * scaleFactor;
+            let btnWidth = width - (80 * scaleFactor);
+            let startX = 40 * scaleFactor;
+
+            for (let i = 0; i < 4; i++) {
+                optionButtons.push({
+                    x: startX,
+                    y: startY + i * (btnHeight + spacing),
+                    w: btnWidth,
+                    h: btnHeight,
+                    hover: false
+                });
+            }
+
+            let rW = 220 * scaleFactor;
+            let rH = 56 * scaleFactor;
+            restartButton = {
+                x: width / 2 - rW / 2,
+                y: height * 0.72,
+                w: rW,
+                h: rH,
+                hover: false
+            };
+        }
+
+        function windowResized() {
+            let container = document.getElementById('canvas-container');
+            let w = container.clientWidth;
+            let h = w * 0.75;
+            resizeCanvas(w, h);
+            recalculateLayout();
+        }
+
+        function draw() {
+            // 背景漸層質感處理
+            background(15, 23, 42); 
+
+            // 卡片主背景 (深藍玻璃風格)
+            fill(30, 41, 59, 235);
+            stroke(71, 85, 105);
+            strokeWeight(2 * scaleFactor);
+            rect(16 * scaleFactor, 16 * scaleFactor, width - (32 * scaleFactor), height - (32 * scaleFactor), 20 * scaleFactor);
+
+            if (gameState === "QUIZ" || gameState === "FEEDBACK") {
+                drawQuizScreen();
+            } else if (gameState === "END") {
+                drawEndScreen();
+            }
+
+            updateHoverStates();
+        }
+
+        function drawQuizScreen() {
+            let q = quizQuestions[currentQuestion];
+
+            // 1. 頂部進度條
+            let progress = (currentQuestion) / quizQuestions.length;
+            let barX = 40 * scaleFactor;
+            let barY = 36 * scaleFactor;
+            let barW = width - (80 * scaleFactor);
+            let barH = 8 * scaleFactor;
+
+            noStroke();
+            fill(51, 65, 85);
+            rect(barX, barY, barW, barH, barH / 2);
+            fill(129, 140, 248); // Indigo glow
+            rect(barX, barY, barW * progress, barH, barH / 2);
+
+            // 2. 題號與目前分數提示
+            textFont('Chiron Sung HK');
+            fill(148, 163, 184);
+            textSize(Math.max(12, 14 * scaleFactor));
+            textAlign(LEFT, CENTER);
+            text(`第 ${currentQuestion + 1} 題 / 共 ${quizQuestions.length} 題`, barX, barY + 22 * scaleFactor);
+
+            textAlign(RIGHT, CENTER);
+            let totalPossible = quizQuestions.length * 20;
+            let currentPercentage = Math.round((scoreCount / totalPossible) * 100);
+            text(`即時得分: ${scoreCount} 分`, width - barX, barY + 22 * scaleFactor);
+
+            // 3. 題目內文
+            fill(248, 250, 252);
+            textSize(Math.max(16, 22 * scaleFactor));
+            textStyle(BOLD);
+            textAlign(LEFT, TOP);
+            text(q.question, barX, barY + 44 * scaleFactor, barW, 65 * scaleFactor);
+            textStyle(NORMAL);
+
+            // 4. 四個選項按鈕
+            for (let i = 0; i < 4; i++) {
+                let btn = optionButtons[i];
+                let isHover = btn.hover && gameState === "QUIZ";
+
+                let bgColor = color(40, 53, 73);
+                let borderColor = color(71, 85, 105);
+                let textColor = color(241, 245, 249);
+
+                if (gameState === "QUIZ") {
+                    if (isHover) {
+                        bgColor = color(79, 70, 229); // Hover Indigo
+                        borderColor = color(165, 180, 252);
+                    }
+                } else if (gameState === "FEEDBACK") {
+                    if (i === q.correct) {
+                        bgColor = color(34, 197, 94); // 答對 - 翡翠綠
+                        borderColor = color(134, 239, 172);
+                    } else if (i === selectedOption) {
+                        bgColor = color(239, 68, 68); // 答錯 - 胭脂紅
+                        borderColor = color(252, 165, 165);
+                    } else {
+                        bgColor = color(30, 41, 59, 100);
+                        textColor = color(100, 116, 139);
+                    }
+                }
+
+                stroke(borderColor);
+                strokeWeight(2 * scaleFactor);
+                fill(bgColor);
+                rect(btn.x, btn.y, btn.w, btn.h, 12 * scaleFactor);
+
+                // 按鈕文字與選項標號 (A, B, C, D)
+                noStroke();
+                fill(textColor);
+                textSize(Math.max(13, 17 * scaleFactor));
+                textAlign(LEFT, CENTER);
+                let label = String.fromCharCode(65 + i);
+                text(`${label}.  ${q.options[i]}`, btn.x + 20 * scaleFactor, btn.y + btn.h / 2);
+            }
+
+            // 答題反饋倒數與跳頁
+            if (gameState === "FEEDBACK") {
+                if (millis() - feedbackTimer > 1200) {
+                    currentQuestion++;
+                    if (currentQuestion >= quizQuestions.length) {
+                        gameState = "END";
+                    } else {
+                        gameState = "QUIZ";
+                    }
+                }
+            }
+        }
+
+        function drawEndScreen() {
+            textFont('Chiron Sung HK');
+
+            // 標題
+            textAlign(CENTER, CENTER);
+            fill(248, 250, 252);
+            textSize(Math.max(20, 32 * scaleFactor));
+            textStyle(BOLD);
+            text("🎉 測驗順利完成！", width / 2, height * 0.18);
+
+            // 成績分數卡片
+            let cardW = width * 0.6;
+            let cardH = height * 0.34;
+            let cardX = width / 2 - cardW / 2;
+            let cardY = height * 0.27;
+
+            fill(15, 23, 42);
+            stroke(99, 102, 241);
+            strokeWeight(3 * scaleFactor);
+            rect(cardX, cardY, cardW, cardH, 16 * scaleFactor);
+
+            noStroke();
+            fill(148, 163, 184);
+            textSize(Math.max(12, 16 * scaleFactor));
+            textStyle(NORMAL);
+            text("您的最終總得分", width / 2, cardY + cardH * 0.28);
+
+            let totalPossible = quizQuestions.length * 20;
+            fill(251, 191, 36); // 金黃得分文字
+            textSize(Math.max(28, 44 * scaleFactor));
+            textStyle(BOLD);
+            text(`${scoreCount} / ${totalPossible}`, width / 2, cardY + cardH * 0.65);
+
+            // 總結評語
+            fill(226, 232, 240);
+            textSize(Math.max(13, 18 * scaleFactor));
+            textStyle(NORMAL);
+            let resultFeedback = "";
+            let correctNum = scoreCount / 20;
+            if (scoreCount === totalPossible) {
+                resultFeedback = "完全答對！您是真正的智慧學霸！💯";
+            } else if (scoreCount >= totalPossible * 0.6) {
+                resultFeedback = `答對了 ${correctNum} 題！表現相當優異！👍`;
+            } else {
+                resultFeedback = `答對了 ${correctNum} 題！繼續努力，再試一次吧！💪`;
+            }
+            text(resultFeedback, width / 2, height * 0.64);
+
+            // 重新開始按鈕
+            let btn = restartButton;
+            if (btn.hover) {
+                fill(99, 102, 241);
+                stroke(165, 180, 252);
+            } else {
+                fill(79, 70, 229);
+                stroke(129, 140, 248);
+            }
+            strokeWeight(2 * scaleFactor);
+            rect(btn.x, btn.y, btn.w, btn.h, btn.h / 2);
+
+            noStroke();
+            fill(255);
+            textSize(Math.max(14, 19 * scaleFactor));
+            textStyle(BOLD);
+            text("再試一次", width / 2, btn.y + btn.h / 2);
+        }
+
+        function updateHoverStates() {
+            if (gameState === "QUIZ") {
+                for (let btn of optionButtons) {
+                    btn.hover = mouseX >= btn.x && mouseX <= btn.x + btn.w &&
+                                mouseY >= btn.y && mouseY <= btn.y + btn.h;
+                }
+            } else if (gameState === "END") {
+                restartButton.hover = mouseX >= restartButton.x && mouseX <= restartButton.x + restartButton.w &&
+                                      mouseY >= restartButton.y && mouseY <= restartButton.y + restartButton.h;
+            }
+        }
+
+        function mousePressed() {
+            if (gameState === "QUIZ") {
+                for (let i = 0; i < 4; i++) {
+                    let btn = optionButtons[i];
+                    if (mouseX >= btn.x && mouseX <= btn.x + btn.w &&
+                        mouseY >= btn.y && mouseY <= btn.y + btn.h) {
+                        
+                        selectedOption = i;
+                        let isCorrect = (i === quizQuestions[currentQuestion].correct);
+                        if (isCorrect) {
+                            scoreCount += 20;
+                        }
+                        gameState = "FEEDBACK";
+                        feedbackTimer = millis();
+                        break;
+                    }
+                }
+            } else if (gameState === "END") {
+                let btn = restartButton;
+                if (mouseX >= btn.x && mouseX <= btn.x + btn.w &&
+                    mouseY >= btn.y && mouseY <= btn.y + btn.h) {
+                    resetQuiz();
+                }
+            }
+        }
+
+        function resetQuiz() {
+            currentQuestion = 0;
+            scoreCount = 0;
+            gameState = "QUIZ";
+            selectedOption = -1;
+        }
+    </script>
+</body>
+</html>
